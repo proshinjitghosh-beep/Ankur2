@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
   CloudRain,
   Droplets,
   Loader2,
+  RefreshCw,
   ShieldAlert,
   Sprout,
   Thermometer,
@@ -13,15 +14,16 @@ import {
 import {
   CROPS,
   EARLY_WARNINGS,
-  getCropDistrictRisk,
 } from '../../data/bangladeshAgriData';
+import { fetchCropRiskAssessment } from '../../services/riskApi';
 import {
+  AgriculturalRiskAssessment,
   DistrictProfile,
   NavSection,
   TrackedCropPlot,
   UserPreferences,
 } from '../../types/agri';
-import { RainfallTrendChart, RiskBreakdownChart } from '../charts/AgriCharts';
+import { RainfallTrendChart } from '../charts/AgriCharts';
 import { formatTemp, SeverityIndicator } from '../common/SeverityIndicator';
 
 interface OverviewViewProps {
@@ -30,6 +32,7 @@ interface OverviewViewProps {
   liveDistrict: DistrictProfile;
   weatherLoading: boolean;
   weatherError: string | null;
+  onRefreshWeather: () => void;
   onNavigate: (section: NavSection) => void;
 }
 
@@ -39,14 +42,44 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
   liveDistrict,
   weatherLoading,
   weatherError,
+  onRefreshWeather,
   onNavigate,
 }) => {
   const [bannerError, setBannerError] = useState(false);
+  const [liveRisk, setLiveRisk] = useState<AgriculturalRiskAssessment | null>(null);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskError, setRiskError] = useState<string | null>(null);
 
   const district = liveDistrict;
+  const hasLiveWeather = district.currentWeather.isLive === true;
+  const isInitialLiveSync = weatherLoading && !hasLiveWeather;
+  const isLiveUnavailable = !weatherLoading && !hasLiveWeather;
+
   const primaryCrop =
     CROPS.find((c) => c.id === preferences.primaryCrop) ?? CROPS[0];
-  const cropRisk = getCropDistrictRisk(primaryCrop.id, district.id, district);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setRiskLoading(true);
+    setRiskError(null);
+    fetchCropRiskAssessment({
+      districtId: district.id,
+      cropId: preferences.primaryCrop,
+      window: '72h',
+      includeHistorical: true,
+      signal: controller.signal,
+    })
+      .then((res) => {
+        setLiveRisk(res);
+        setRiskLoading(false);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setRiskError(err instanceof Error ? err.message : 'Risk assessment unavailable');
+        setRiskLoading(false);
+      });
+    return () => controller.abort();
+  }, [district.id, preferences.primaryCrop]);
 
   const districtWarnings = EARLY_WARNINGS.filter((w) =>
     w.districtIds.includes(district.id)
@@ -56,15 +89,26 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {weatherError && (
+      {isLiveUnavailable && (
         <div
           role="alert"
-          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950 flex items-center gap-2.5"
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-950 flex flex-wrap items-center justify-between gap-3"
         >
-          <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
-          <span>
-            Live weather feed warning for {district.name}: {weatherError}. Showing baseline station profile.
-          </span>
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+            <span>
+              Live Open-Meteo weather unavailable for {district.name}
+              {weatherError ? `: ${weatherError}` : ''}. Live weather metrics are withheld; crop risk falls back to static baseline profile.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onRefreshWeather}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-amber-300 bg-white text-amber-950 font-semibold hover:bg-amber-100 transition-colors shrink-0"
+          >
+            <RefreshCw className="w-3 h-3" aria-hidden="true" />
+            <span>Retry Live Feed</span>
+          </button>
         </div>
       )}
 
@@ -102,9 +146,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <p className="mt-1.5 text-sm text-emerald-50/90 leading-relaxed max-w-xl">
               {preferences.farmName} ({preferences.farmSizeBigha} Bigha) · Primary focus on{' '}
               <span className="font-semibold text-white">{primaryCrop.name}</span>.{' '}
-              {weatherLoading && !district.currentWeather.isLive
+              {isInitialLiveSync
                 ? 'Fetching live Open-Meteo station feed…'
-                : district.currentWeather.updatedLabel}
+                : hasLiveWeather
+                ? district.currentWeather.updatedLabel
+                : 'Live Open-Meteo weather unavailable'}
               .
             </p>
           </div>
@@ -137,18 +183,35 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <span>Temperature & Feels Like</span>
             <Thermometer className="w-4 h-4 text-amber-700" aria-hidden="true" />
           </div>
-          <div className="mt-2.5 flex items-baseline gap-2.5">
-            <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
-              {formatTemp(district.currentWeather.tempC, preferences.tempUnit)}
-            </span>
-            <span className="text-xs text-[#526056] font-mono tabular-nums">
-              Feels {formatTemp(district.currentWeather.feelsLikeC, preferences.tempUnit)}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-[#526056]">
-            {district.currentWeather.condition} · Wind {district.currentWeather.windKmh} km/h{' '}
-            {district.currentWeather.windDir}
-          </p>
+          {hasLiveWeather ? (
+            <>
+              <div className="mt-2.5 flex items-baseline gap-2.5">
+                <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
+                  {formatTemp(district.currentWeather.tempC, preferences.tempUnit)}
+                </span>
+                <span className="text-xs text-[#526056] font-mono tabular-nums">
+                  Feels {formatTemp(district.currentWeather.feelsLikeC, preferences.tempUnit)}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-[#526056]">
+                {district.currentWeather.condition} ·{' '}
+                {district.currentWeather.windKmh !== null
+                  ? `Wind ${district.currentWeather.windKmh} km/h ${district.currentWeather.windDir ?? ''}`
+                  : 'Wind unavailable'}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mt-2.5 font-display text-xl font-bold text-[#647368]">
+                {isInitialLiveSync ? 'Loading…' : 'Unavailable'}
+              </div>
+              <p className="mt-2 text-xs text-[#647368]">
+                {isInitialLiveSync
+                  ? 'Fetching live Open-Meteo conditions'
+                  : 'Live weather feed unreachable'}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="bg-white border border-[#DCE3DC] rounded-xl p-5">
@@ -156,19 +219,40 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <span>Humidity & Soil Moisture</span>
             <Droplets className="w-4 h-4 text-emerald-700" aria-hidden="true" />
           </div>
-          <div className="mt-2.5 flex items-baseline gap-2.5">
-            <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
-              {district.currentWeather.humidityPct}%
-            </span>
-            <span className="text-xs text-[#526056] font-mono tabular-nums">
-              Soil {district.currentWeather.soilMoisturePct}%
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-[#526056]">
-            {district.currentWeather.humidityPct >= 80
-              ? 'Elevated morning dew & fungal spore window'
-              : 'Comfortable canopy evaporation rate'}
-          </p>
+          {hasLiveWeather ? (
+            <>
+              <div className="mt-2.5 flex items-baseline gap-2.5">
+                <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
+                  {district.currentWeather.humidityPct !== null
+                    ? `${district.currentWeather.humidityPct}%`
+                    : '—'}
+                </span>
+                <span className="text-xs text-[#526056] font-mono tabular-nums">
+                  {district.currentWeather.soilMoisturePct !== null
+                    ? `Soil ${district.currentWeather.soilMoisturePct}%`
+                    : 'Soil N/A'}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-[#526056]">
+                {district.currentWeather.humidityPct === null
+                  ? 'Relative humidity reading unavailable'
+                  : district.currentWeather.humidityPct >= 80
+                  ? 'Elevated morning dew & fungal spore window'
+                  : 'Comfortable canopy evaporation rate'}
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mt-2.5 font-display text-xl font-bold text-[#647368]">
+                {isInitialLiveSync ? 'Loading…' : 'Unavailable'}
+              </div>
+              <p className="mt-2 text-xs text-[#647368]">
+                {isInitialLiveSync
+                  ? 'Fetching live Open-Meteo telemetry'
+                  : 'Live moisture feed unreachable'}
+              </p>
+            </>
+          )}
         </div>
 
         <div className="bg-white border border-[#DCE3DC] rounded-xl p-5">
@@ -176,15 +260,28 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <span>24h Rainfall Total</span>
             <CloudRain className="w-4 h-4 text-emerald-800" aria-hidden="true" />
           </div>
-          <div className="mt-2.5 flex items-baseline gap-2.5">
-            <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
-              {district.currentWeather.rainfall24hMm.toFixed(1)} mm
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-[#526056] flex items-center gap-1.5">
-            <Wind className="w-3.5 h-3.5 text-[#647368]" aria-hidden="true" />
-            <span>{district.riverBasin}</span>
-          </p>
+          {hasLiveWeather ? (
+            <>
+              <div className="mt-2.5 flex items-baseline gap-2.5">
+                <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
+                  {district.currentWeather.rainfall24hMm !== null
+                    ? `${district.currentWeather.rainfall24hMm.toFixed(1)} mm`
+                    : '—'}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-[#526056] flex items-center gap-1.5">
+                <Wind className="w-3.5 h-3.5 text-[#647368]" aria-hidden="true" />
+                <span>{district.riverBasin}</span>
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mt-2.5 font-display text-xl font-bold text-[#647368]">
+                {isInitialLiveSync ? 'Loading…' : 'Unavailable'}
+              </div>
+              <p className="mt-2 text-xs text-[#647368]">{district.riverBasin}</p>
+            </>
+          )}
         </div>
 
         <div className="bg-white border border-[#DCE3DC] rounded-xl p-5">
@@ -192,16 +289,41 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
             <span>Agricultural Risk Score</span>
             <ShieldAlert className="w-4 h-4 text-[#526056]" aria-hidden="true" />
           </div>
-          <div className="mt-2.5 flex items-center justify-between gap-2">
-            <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
-              {cropRisk.compositeScore}
-              <span className="text-base font-normal text-[#647368]">/100</span>
-            </span>
-            <SeverityIndicator severity={cropRisk.compositeSeverity} compact />
-          </div>
-          <p className="mt-2 text-xs text-[#526056] truncate">
-            For {primaryCrop.name} in {district.name}
-          </p>
+          {riskLoading && !liveRisk ? (
+            <>
+              <div className="mt-2.5 font-display text-xl font-bold text-[#647368]">
+                Loading…
+              </div>
+              <p className="mt-2 text-xs text-[#647368]">
+                Evaluating 5-dimension crop risk
+              </p>
+            </>
+          ) : liveRisk ? (
+            <>
+              <div className="mt-2.5 flex items-center justify-between gap-2">
+                <span className="font-display text-3xl font-bold text-[#172019] tabular-nums">
+                  {liveRisk.overallRisk.score ?? '—'}
+                  {liveRisk.overallRisk.score !== null && (
+                    <span className="text-base font-normal text-[#647368]">/100</span>
+                  )}
+                </span>
+                <SeverityIndicator severity={liveRisk.overallRisk.severity} compact />
+              </div>
+              <p className="mt-2 text-xs text-[#526056] truncate">
+                {primaryCrop.name} · Confidence: {liveRisk.confidence.level} (
+                {liveRisk.confidence.index.toFixed(2)})
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="mt-2.5 font-display text-xl font-bold text-[#647368]">
+                Unavailable
+              </div>
+              <p className="mt-2 text-xs text-[#647368] truncate">
+                {riskError ?? 'Live risk engine unreachable'}
+              </p>
+            </>
+          )}
         </div>
       </section>
 
@@ -344,9 +466,11 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 7-Day Rainfall Outlook — {district.name}
               </h3>
               <p className="text-xs text-[#526056] mt-0.5">
-                {district.currentWeather.isLive
+                {hasLiveWeather
                   ? 'Live Open-Meteo daily precipitation vs. field waterlogging threshold'
-                  : 'Baseline daily precipitation vs. field waterlogging threshold'}
+                  : isInitialLiveSync
+                  ? 'Loading live Open-Meteo daily precipitation forecast…'
+                  : 'Live daily precipitation forecast currently unavailable'}
               </p>
             </div>
             <button
@@ -357,17 +481,48 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               Full Forecast
             </button>
           </div>
-          <RainfallTrendChart data={district.forecast14Days.slice(0, 7)} />
+          {hasLiveWeather ? (
+            <RainfallTrendChart data={district.forecast14Days.slice(0, 7)} />
+          ) : (
+            <div className="h-[180px] rounded-lg border border-dashed border-[#DCE3DC] bg-[#FAFBF9] flex flex-col items-center justify-center gap-2 text-center px-4">
+              {isInitialLiveSync ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin text-emerald-700" aria-hidden="true" />
+                  <p className="text-xs text-[#526056]">
+                    Syncing 7-day Open-Meteo precipitation forecast for {district.name}…
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs font-medium text-[#3A473E]">
+                    Live Open-Meteo 7-day forecast could not be retrieved.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onRefreshWeather}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[#DCE3DC] bg-white text-xs font-semibold text-[#172019] hover:bg-[#F1F4EF]"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                    <span>Retry Live Forecast</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="xl:col-span-5 bg-white border border-[#DCE3DC] rounded-xl p-6">
           <div className="flex items-center justify-between gap-4 mb-4">
             <div>
               <h3 className="font-display text-base font-semibold text-[#172019]">
-                {primaryCrop.name} Risk Breakdown
+                {primaryCrop.name} Risk Breakdown (72h)
               </h3>
               <p className="text-xs text-[#526056] mt-0.5">
-                Simulated multi-hazard scores in {district.name}
+                {liveRisk
+                  ? `5-dimension live engine in ${district.name} · Stage: ${liveRisk.cropContext.stageStatus}`
+                  : riskLoading
+                  ? 'Computing 5-dimension crop risk breakdown…'
+                  : 'Live risk breakdown unavailable'}
               </p>
             </div>
             <button
@@ -378,7 +533,61 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
               Why Risks Exist
             </button>
           </div>
-          <RiskBreakdownChart dimensions={cropRisk.dimensions} />
+          {liveRisk ? (
+            <div className="space-y-4">
+              {liveRisk.dimensions.map((dim) => {
+                const barColor =
+                  dim.severity === 'Critical'
+                    ? 'bg-red-700'
+                    : dim.severity === 'High'
+                    ? 'bg-orange-600'
+                    : dim.severity === 'Moderate'
+                    ? 'bg-amber-600'
+                    : dim.severity === 'Low'
+                    ? 'bg-emerald-700'
+                    : 'bg-slate-400';
+
+                const textColor =
+                  dim.severity === 'Critical'
+                    ? 'text-red-900'
+                    : dim.severity === 'High'
+                    ? 'text-orange-900'
+                    : dim.severity === 'Moderate'
+                    ? 'text-amber-800'
+                    : dim.severity === 'Low'
+                    ? 'text-emerald-800'
+                    : 'text-slate-700';
+
+                return (
+                  <div key={dim.dimensionId} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="font-medium text-[#172019]">{dim.label}</div>
+                      <div className="flex items-center gap-2 font-mono tabular-nums text-xs">
+                        <span className={`font-semibold ${textColor}`}>{dim.severity}</span>
+                        <span className="text-[#647368]">·</span>
+                        <span className="text-[#172019] font-medium">
+                          {dim.score !== null ? `${dim.score}/100` : 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full h-2.5 bg-[#EDF1EC] rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+                        style={{ width: `${dim.score ?? 0}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-[#526056] leading-relaxed">{dim.explanation}</p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="h-[180px] rounded-lg border border-dashed border-[#DCE3DC] bg-[#FAFBF9] flex items-center justify-center text-xs text-[#647368] px-4 text-center">
+              {riskLoading
+                ? 'Evaluating live Open-Meteo telemetry across 5 risk dimensions…'
+                : riskError ?? 'Risk breakdown unavailable'}
+            </div>
+          )}
         </section>
       </div>
     </div>

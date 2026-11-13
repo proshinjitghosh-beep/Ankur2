@@ -117,7 +117,7 @@ export interface DailyForecastPoint {
   tempMinC: number;
   rainfallMm: number;
   rainOnlyMm?: number;
-  humidityPct: number;
+  humidityPct: number | null;
   windKmh: number;
   rainProbPct: number;
   et0Mm?: number;
@@ -143,16 +143,18 @@ export interface DistrictProfile {
   soilType: string;
   currentWeather: {
     condition: string;
-    tempC: number;
-    feelsLikeC: number;
-    humidityPct: number;
-    rainfall24hMm: number;
-    precipitationNowMm?: number;
-    windKmh: number;
-    windDir: string;
-    uvIndex: number;
-    soilMoisturePct: number;
-    et0TodayMm?: number;
+    tempC: number | null;
+    feelsLikeC: number | null;
+    humidityPct: number | null;
+    rainfall24hMm: number | null;
+    precipitationNowMm?: number | null;
+    rainNowMm?: number | null;
+    windKmh: number | null;
+    windDir: string | null;
+    uvIndex: number | null;
+    soilMoisturePct: number | null;
+    et0TodayMm?: number | null;
+    surfacePressureHpa?: number | null;
     updatedLabel: string;
     isLive?: boolean;
   };
@@ -167,27 +169,27 @@ export interface LiveWeatherForecastPayload {
   coordinates: {
     latitude: number;
     longitude: number;
-    elevationM: number;
+    elevationM: number | null;
     timezone: string;
   };
   fetchedAtIso: string;
   current: {
     timeIso: string;
     condition: string;
-    weatherCode: number;
-    tempC: number;
-    feelsLikeC: number;
-    humidityPct: number;
-    precipitationNowMm: number;
-    rainNowMm: number;
-    rainfall24hMm: number;
-    windKmh: number;
-    windDirectionDeg: number;
-    windDir: string;
-    uvIndex: number;
-    soilMoisturePct: number;
-    et0TodayMm: number;
-    surfacePressureHpa: number;
+    weatherCode: number | null;
+    tempC: number | null;
+    feelsLikeC: number | null;
+    humidityPct: number | null;
+    precipitationNowMm: number | null;
+    rainNowMm: number | null;
+    rainfall24hMm: number | null;
+    windKmh: number | null;
+    windDirectionDeg: number | null;
+    windDir: string | null;
+    uvIndex: number | null;
+    soilMoisturePct: number | null;
+    et0TodayMm: number | null;
+    surfacePressureHpa: number | null;
   };
   daily: DailyForecastPoint[];
   extremeIndicators: ExtremeWeatherIndicator[];
@@ -328,3 +330,206 @@ export interface UserPreferences {
   floodSensitivity: RiskSeverity;
   showBengaliTerms: boolean;
 }
+
+// ============================================================================
+// Phase 2: Agricultural Risk Intelligence Engine Contracts
+// ============================================================================
+
+export type EngineRiskSeverity =
+  | 'Low'
+  | 'Moderate'
+  | 'High'
+  | 'Critical'
+  | 'Unavailable';
+
+export type RiskCropId =
+  | 'rice'
+  | 'wheat'
+  | 'maize'
+  | 'potato'
+  | 'vegetables'
+  | 'jute'
+  | 'mango'
+  | 'chili';
+
+export type AnyCropInputId = RiskCropId | CropId;
+
+export type VegetableSubtype =
+  | 'solanaceous_fruiting'
+  | 'cucurbits'
+  | 'leafy_greens'
+  | 'brassicas';
+
+export type RiskDimensionId =
+  | 'heat_stress'
+  | 'excessive_rainfall_waterlogging'
+  | 'drought'
+  | 'disease_conducive_weather'
+  | 'wind_damage';
+
+export type ForecastWindow = '24h' | '72h' | '7d' | '14d';
+
+export type ConfidenceLevel = 'High' | 'Moderate' | 'Low' | 'Insufficient';
+
+export type ProvenanceStatus =
+  | 'verified_reference'
+  | 'proposed_requires_validation';
+
+export interface ThresholdProvenance {
+  status: ProvenanceStatus;
+  sourceTitle: string | null;
+  issuingOrganization: string | null;
+  publicationYear: number | null;
+  urlOrDoi: string | null;
+  scopeNote: string;
+}
+
+export interface RiskTriggerVariable {
+  variable: string;
+  observedValue: string;
+  threshold: string;
+}
+
+export interface RiskDimensionAssessment {
+  dimensionId: RiskDimensionId;
+  label: string;
+  score: number | null;
+  severity: EngineRiskSeverity;
+  weight: number;
+  excludedFromComposite: boolean;
+  triggers: RiskTriggerVariable[];
+  provenance: ThresholdProvenance;
+  expectedWindow: string;
+  explanation: string;
+  recommendedAction: string;
+  nonWeatherBlindSpots: string[];
+}
+
+export interface SeasonPlausibility {
+  status: 'plausible' | 'off_season_warning' | 'not_evaluated';
+  expectedPlantingWindow: string | null;
+  warningMessage: string | null;
+}
+
+export interface SoilMoistureProxyMeta {
+  rawM3PerM3: number | null;
+  unit: 'm3/m3';
+  depthLayer: '0-7 cm';
+  source: 'hourly_model_proxy' | 'unavailable';
+  observationHourIso: string | null;
+  isObservedSensor: false;
+  heuristicPct: number | null;
+  isUnvalidatedHeuristic: true;
+  heuristicNote: string;
+}
+
+export interface HistoricalBaselineContext {
+  source: 'open-meteo-archive' | 'unavailable';
+  dataset: 'era5' | 'era5_land' | 'ecmwf_ifs_historical_forecast';
+  archiveLagDays: number;
+  startDate: string | null;
+  endDate: string | null;
+  totalPrecipitationMm: number | null;
+  totalEt0Mm: number | null;
+  dryDaysCount: number | null;
+  heavyRainDaysCount: number | null;
+  roleNote: string;
+  unavailableReason?: string;
+}
+
+export interface AgriculturalRiskAssessment {
+  assessmentId: string;
+  generatedAtIso: string;
+  forecastWindow: ForecastWindow;
+  location: {
+    districtId: DistrictId | null;
+    name: string;
+    division: DivisionName | null;
+    latitude: number;
+    longitude: number;
+    elevationM: number | null;
+    soilType: string | null;
+    agroZone: string | null;
+  };
+  cropContext: {
+    cropId: RiskCropId;
+    cropName: string;
+    varietyId: string | null;
+    vegetableSubtype: VegetableSubtype | null;
+    stageStatus: 'Specified' | 'Unspecified';
+    stageSource:
+      | 'planting_date'
+      | 'days_after_planting'
+      | 'explicit_stage'
+      | 'unspecified';
+    growthStageId: string | null;
+    growthStageLabel: string | null;
+    daysAfterPlanting: number | null;
+    seasonPlausibility: SeasonPlausibility;
+  };
+  overallRisk: {
+    score: number | null;
+    severity: EngineRiskSeverity;
+    dominantHazard: RiskDimensionId | null;
+    weightedMeanScore: number | null;
+    peakHazardScore: number | null;
+    blendScoreBeforeGuard: number | null;
+    floorGuardApplied: boolean;
+    activeWeightCoverage: number;
+    aggregationFormula: string;
+  };
+  confidence: {
+    level: ConfidenceLevel;
+    index: number;
+    isCalibratedProbability: false;
+    components: {
+      dataCompleteness: number;
+      leadTimeFactor: number;
+      stageSpecificity: number;
+    };
+    missingVariables: string[];
+    formula: string;
+    note: string;
+  };
+  weatherContext: {
+    forecastSource: 'open-meteo-forecast';
+    soilMoistureProxy: SoilMoistureProxyMeta;
+    historicalBaseline: HistoricalBaselineContext;
+  };
+  dimensions: RiskDimensionAssessment[];
+  scientificDisclosures: string[];
+}
+
+export interface DailyRiskProgressionPoint {
+  isoDate: string;
+  dayLabel: string;
+  overallScore: number | null;
+  overallSeverity: EngineRiskSeverity;
+  dominantHazard: RiskDimensionId | null;
+  confidenceLevel: ConfidenceLevel;
+  confidenceIndex: number;
+  dimensionScores: Record<RiskDimensionId, number | null>;
+}
+
+export interface RiskForecastPayload {
+  assessmentSummary: AgriculturalRiskAssessment;
+  dailyProgression: DailyRiskProgressionPoint[];
+}
+
+export interface DistrictMultiCropRiskPayload {
+  district: {
+    id: DistrictId;
+    name: string;
+    division: DivisionName;
+    latitude: number;
+    longitude: number;
+    agroZone: string;
+    riverBasin: string;
+    elevationM: number;
+    soilType: string;
+  };
+  forecastWindow: ForecastWindow;
+  generatedAtIso: string;
+  assessments: AgriculturalRiskAssessment[];
+}
+

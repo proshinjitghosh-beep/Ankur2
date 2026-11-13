@@ -37,7 +37,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'SE',
       uvIndex: 7,
       soilMoisturePct: 68,
-      updatedLabel: 'Simulated feed · 10 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 54,
     overallRiskSeverity: 'Medium',
@@ -99,7 +99,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'S',
       uvIndex: 4,
       soilMoisturePct: 92,
-      updatedLabel: 'Simulated feed · 8 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 78,
     overallRiskSeverity: 'High',
@@ -161,7 +161,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'SSE',
       uvIndex: 8,
       soilMoisturePct: 59,
-      updatedLabel: 'Simulated feed · 12 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 66,
     overallRiskSeverity: 'Medium',
@@ -223,7 +223,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'NW',
       uvIndex: 7,
       soilMoisturePct: 41,
-      updatedLabel: 'Simulated feed · 6 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 48,
     overallRiskSeverity: 'Medium',
@@ -285,7 +285,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'SE',
       uvIndex: 5,
       soilMoisturePct: 85,
-      updatedLabel: 'Simulated feed · 14 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 71,
     overallRiskSeverity: 'High',
@@ -347,7 +347,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'N',
       uvIndex: 7,
       soilMoisturePct: 38,
-      updatedLabel: 'Simulated feed · 9 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 34,
     overallRiskSeverity: 'Low',
@@ -409,7 +409,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'S',
       uvIndex: 6,
       soilMoisturePct: 71,
-      updatedLabel: 'Simulated feed · 11 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 51,
     overallRiskSeverity: 'Medium',
@@ -471,7 +471,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'SE',
       uvIndex: 5,
       soilMoisturePct: 75,
-      updatedLabel: 'Simulated feed · 7 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 46,
     overallRiskSeverity: 'Medium',
@@ -533,7 +533,7 @@ const ARCHETYPE_TEMPLATES: Record<
       windDir: 'SE',
       uvIndex: 5,
       soilMoisturePct: 77,
-      updatedLabel: 'Simulated feed · 9 mins ago',
+      updatedLabel: 'Static baseline profile (not live)',
     },
     overallRiskScore: 61,
     overallRiskSeverity: 'Medium',
@@ -602,11 +602,11 @@ export const DISTRICTS: DistrictProfile[] = BANGLADESH_DISTRICTS.map((meta) => {
   const rainFactor = 0.9 + (seed % 5) * 0.05; // 0.90..1.10
   const moistureDelta = ((seed >> 2) % 7) - 3; // -3..+3
 
-  const tempC = tpl.currentWeather.tempC + tempDelta;
-  const feelsLikeC = tpl.currentWeather.feelsLikeC + tempDelta;
-  const humidityPct = Math.max(45, Math.min(96, tpl.currentWeather.humidityPct + humDelta));
-  const rainfall24hMm = Number((tpl.currentWeather.rainfall24hMm * rainFactor).toFixed(1));
-  const soilMoisturePct = Math.max(25, Math.min(95, tpl.currentWeather.soilMoisturePct + moistureDelta));
+  const tempC = (tpl.currentWeather.tempC ?? 0) + tempDelta;
+  const feelsLikeC = (tpl.currentWeather.feelsLikeC ?? 0) + tempDelta;
+  const humidityPct = Math.max(45, Math.min(96, (tpl.currentWeather.humidityPct ?? 65) + humDelta));
+  const rainfall24hMm = Number(((tpl.currentWeather.rainfall24hMm ?? 0) * rainFactor).toFixed(1));
+  const soilMoisturePct = Math.max(25, Math.min(95, (tpl.currentWeather.soilMoisturePct ?? 60) + moistureDelta));
   const overallRiskScore = Math.max(20, Math.min(92, tpl.overallRiskScore + (seed % 7) - 3));
   const overallRiskSeverity: RiskSeverity =
     overallRiskScore >= 67 ? 'High' : overallRiskScore >= 38 ? 'Medium' : 'Low';
@@ -729,7 +729,7 @@ export function mergeLiveWeatherIntoDistrict(
 
   return {
     ...base,
-    elevationM: live.coordinates.elevationM || base.elevationM,
+    elevationM: live.coordinates.elevationM ?? base.elevationM,
     currentWeather: {
       condition: live.current.condition,
       tempC: live.current.tempC,
@@ -737,11 +737,13 @@ export function mergeLiveWeatherIntoDistrict(
       humidityPct: live.current.humidityPct,
       rainfall24hMm: live.current.rainfall24hMm,
       precipitationNowMm: live.current.precipitationNowMm,
+      rainNowMm: live.current.rainNowMm,
       windKmh: live.current.windKmh,
       windDir: live.current.windDir,
       uvIndex: live.current.uvIndex,
       soilMoisturePct: live.current.soilMoisturePct,
       et0TodayMm: live.current.et0TodayMm,
+      surfacePressureHpa: live.current.surfacePressureHpa,
       updatedLabel: `Live Open-Meteo · Updated ${fetchedTime}`,
       isLive: true,
     },
@@ -770,7 +772,11 @@ export function getCropDistrictRisk(
     arch === 'chittagong-hill';
   const isCoastalSaline = arch === 'coastal-tidal' || arch === 'delta-tidal';
   const isDryNorth = arch === 'teesta-northern' || arch === 'piedmont-dry';
-  const isHighHumidity = district.currentWeather.humidityPct >= 80;
+  const currentHumidity = district.currentWeather.humidityPct;
+  const currentSoilMoisture = district.currentWeather.soilMoisturePct;
+  const currentTemp = district.currentWeather.tempC;
+  const currentFeelsLike = district.currentWeather.feelsLikeC;
+  const isHighHumidity = currentHumidity !== null && currentHumidity >= 80;
   const upcomingRain3d = Number(
     district.forecast14Days
       .slice(0, 3)
@@ -829,7 +835,8 @@ export function getCropDistrictRisk(
   // 2. Drought Risk (responds dynamically to live soil moisture & 72h rain)
   let droughtScore = 22;
   if (district.currentWeather.isLive) {
-    const soilDeficit = Math.max(0, 72 - district.currentWeather.soilMoisturePct);
+    const soilDeficit =
+      currentSoilMoisture !== null ? Math.max(0, 72 - currentSoilMoisture) : 0;
     droughtScore = 12 + Math.min(55, Math.round(soilDeficit * 1.1));
     if (upcomingRain3d < 3) droughtScore = Math.min(88, droughtScore + 12);
     if (isCoastalSaline) droughtScore = Math.min(88, droughtScore + 8);
@@ -849,25 +856,31 @@ export function getCropDistrictRisk(
     droughtScore = Math.max(12, droughtScore - 8);
   }
 
+  const soilMoistureText =
+    currentSoilMoisture !== null ? `${currentSoilMoisture}%` : 'unavailable';
   const droughtSeverity = scoreToSeverity(droughtScore);
   const droughtDetail: RiskDimensionDetail = {
     type: 'Drought',
     severity: droughtSeverity,
     score: droughtScore,
     primaryDriver:
-      isCoastalSaline && droughtScore >= 40
+      currentSoilMoisture === null
+        ? `Soil moisture unavailable; evaluated from ${upcomingRain3d} mm 72h rain outlook`
+        : isCoastalSaline && droughtScore >= 40
         ? `Tidal salinity + falling freshwater availability in ${district.name}`
         : isDryNorth
-        ? `Low soil moisture (${district.currentWeather.soilMoisturePct}%) & sandy loam percolation`
-        : `Adequate soil moisture reserve (${district.currentWeather.soilMoisturePct}%)`,
+        ? `Low soil moisture (${soilMoistureText}) & sandy loam percolation`
+        : `Adequate soil moisture reserve (${soilMoistureText})`,
     explanation:
-      droughtSeverity === 'High'
-        ? `${district.name}'s ${district.soilType.toLowerCase()} drains quickly during dry spells, pulling soil moisture down to ${district.currentWeather.soilMoisturePct}%. ${crop.name} faces moisture stress during critical vegetative or grain-filling stages.`
+      currentSoilMoisture === null
+        ? `Topsoil moisture data is currently unavailable from Open-Meteo for ${district.name}. Drought risk reflects the 72-hour precipitation outlook (${upcomingRain3d} mm) and ${district.soilType.toLowerCase()} retention characteristics.`
+        : droughtSeverity === 'High'
+        ? `${district.name}'s ${district.soilType.toLowerCase()} drains quickly during dry spells, pulling soil moisture down to ${soilMoistureText}. ${crop.name} faces moisture stress during critical vegetative or grain-filling stages.`
         : droughtSeverity === 'Medium'
         ? isCoastalSaline
           ? `While air humidity is high in ${district.name}, rising dry-season canal salinity restricts usable freshwater for ${crop.name}, creating localized physiological drought stress.`
-          : `Extended dry days and ${district.currentWeather.soilMoisturePct}% soil moisture in ${district.name} mean ${crop.name} plots without scheduled irrigation risk uneven stand establishment.`
-        : `Current rainfall and ${district.currentWeather.soilMoisturePct}% soil moisture in ${district.name} comfortably meet ${crop.name} evapotranspiration demand over the coming 7–10 days.`,
+          : `Extended dry days and ${soilMoistureText} soil moisture in ${district.name} mean ${crop.name} plots without scheduled irrigation risk uneven stand establishment.`
+        : `Current rainfall and ${soilMoistureText} soil moisture in ${district.name} comfortably meet ${crop.name} evapotranspiration demand over the coming 7–10 days.`,
     preventiveAction:
       droughtSeverity === 'High'
         ? `Apply light supplemental irrigation (25–30 mm) during early morning or late afternoon, and apply straw mulching (3–4 cm) between rows to cut evaporation.`
@@ -881,10 +894,14 @@ export function getCropDistrictRisk(
   // 3. Heat Stress Risk (responds dynamically to live temperature & feels-like)
   let heatScore = 26;
   if (district.currentWeather.isLive) {
-    const apparent = Math.max(
-      district.currentWeather.tempC,
-      district.currentWeather.feelsLikeC
-    );
+    const tempCandidates = [
+      ...(currentTemp !== null ? [currentTemp] : []),
+      ...(currentFeelsLike !== null ? [currentFeelsLike] : []),
+    ];
+    const apparent =
+      tempCandidates.length > 0
+        ? Math.max(...tempCandidates)
+        : district.forecast14Days[0]?.tempMaxC ?? 28;
     if (apparent >= 38) heatScore = 76;
     else if (apparent >= 34) heatScore = 54;
     else if (apparent >= 30) heatScore = 36;
@@ -906,23 +923,28 @@ export function getCropDistrictRisk(
     heatScore = Math.max(15, heatScore - 10);
   }
 
+  const tempLabel = currentTemp !== null ? `${currentTemp}°C` : 'unavailable';
+  const feelsLabel =
+    currentFeelsLike !== null ? `${currentFeelsLike}°C` : 'unavailable';
   const heatSeverity = scoreToSeverity(heatScore);
   const heatDetail: RiskDimensionDetail = {
     type: 'Heat',
     severity: heatSeverity,
     score: heatScore,
     primaryDriver:
-      heatSeverity === 'High'
-        ? `Feels-like ${district.currentWeather.feelsLikeC}°C exceeds ${crop.name} optimal range (${crop.optimalTempRangeC})`
+      currentTemp === null && currentFeelsLike === null
+        ? `Current temperature unavailable; assessed from daily forecast highs`
+        : heatSeverity === 'High'
+        ? `Feels-like ${feelsLabel} exceeds ${crop.name} optimal range (${crop.optimalTempRangeC})`
         : heatSeverity === 'Medium'
-        ? `Afternoon peaks (${district.currentWeather.tempC}°C) nearing upper crop comfort band`
-        : `Temperatures (${district.currentWeather.tempC}°C) well aligned with ${crop.name} cycle`,
+        ? `Afternoon peaks (${tempLabel}) nearing upper crop comfort band`
+        : `Temperatures (${tempLabel}) well aligned with ${crop.name} cycle`,
     explanation:
       heatSeverity === 'High'
-        ? `Daytime temperatures (${district.currentWeather.tempC}°C, feels-like ${district.currentWeather.feelsLikeC}°C) in ${district.name} exceed ${crop.name}'s optimal range (${crop.optimalTempRangeC}). High canopy heat accelerates respiration loss, reduces pollen viability, or delays tuber bulking.`
+        ? `Daytime temperatures (${tempLabel}, feels-like ${feelsLabel}) in ${district.name} exceed ${crop.name}'s optimal range (${crop.optimalTempRangeC}). High canopy heat accelerates respiration loss, reduces pollen viability, or delays tuber bulking.`
         : heatSeverity === 'Medium'
         ? `Warm afternoons in ${district.name} push canopy microclimate slightly above ${crop.name}'s ideal ${crop.optimalTempRangeC} window, raising daytime transpiration demand.`
-        : `${district.name}'s current thermal profile (${district.currentWeather.tempC}°C daytime / cooler nights) supports healthy photosynthesis and grain or tuber development in ${crop.name}.`,
+        : `${district.name}'s current thermal profile (${tempLabel} daytime / cooler nights) supports healthy photosynthesis and grain or tuber development in ${crop.name}.`,
     preventiveAction:
       heatSeverity === 'High'
         ? `Maintain shallow standing moisture (2–3 cm for paddy) or evening mist/furrow cooling, avoid foliar sprays between 11:00–16:00, and apply Potash (MoP) split to boost thermal tolerance.`
@@ -934,9 +956,13 @@ export function getCropDistrictRisk(
   // 4. Crop Disease Risk (responds dynamically to live humidity & rainfall)
   let diseaseScore = isHighHumidity ? 62 : 30;
   if (district.currentWeather.isLive) {
-    const rh = district.currentWeather.humidityPct;
-    diseaseScore = 18 + Math.max(0, rh - 45) + (upcomingRain3d >= 20 ? 12 : 0);
-    diseaseScore = Math.min(88, Math.round(diseaseScore));
+    if (currentHumidity !== null) {
+      diseaseScore =
+        18 + Math.max(0, currentHumidity - 45) + (upcomingRain3d >= 20 ? 12 : 0);
+      diseaseScore = Math.min(88, Math.round(diseaseScore));
+    } else {
+      diseaseScore = upcomingRain3d >= 20 ? 45 : 25;
+    }
   } else {
     if (arch === 'haor-monsoon') diseaseScore = 82;
     else if (arch === 'delta-tidal') diseaseScore = 71;
@@ -955,6 +981,7 @@ export function getCropDistrictRisk(
     diseaseScore = Math.min(90, diseaseScore + 14);
   }
 
+  const humidityText = currentHumidity !== null ? `${currentHumidity}%` : 'unavailable';
   const diseaseSeverity = scoreToSeverity(diseaseScore);
   const primaryDisease = crop.keyDiseases[0];
   const diseaseDetail: RiskDimensionDetail = {
@@ -962,17 +989,21 @@ export function getCropDistrictRisk(
     severity: diseaseSeverity,
     score: diseaseScore,
     primaryDriver:
-      diseaseSeverity === 'High'
-        ? `${district.currentWeather.humidityPct}% RH + dense dew trigger ${primaryDisease}`
+      currentHumidity === null
+        ? `Relative humidity unavailable; evaluated from ${upcomingRain3d} mm 72h rainfall`
+        : diseaseSeverity === 'High'
+        ? `${humidityText} RH + dense dew trigger ${primaryDisease}`
         : diseaseSeverity === 'Medium'
         ? `Moderate morning leaf wetness favors ${crop.keyDiseases[1] ?? primaryDisease}`
-        : `Dry air (${district.currentWeather.humidityPct}% RH) limits fungal spore spread`,
+        : `Dry air (${humidityText} RH) limits fungal spore spread`,
     explanation:
-      diseaseSeverity === 'High'
-        ? `Sustained ${district.currentWeather.humidityPct}% relative humidity and warm-to-mild nights in ${district.name} create ideal leaf-wetness conditions for ${primaryDisease} and ${crop.keyDiseases[1] ?? 'foliar blight'} in ${crop.name}.`
+      currentHumidity === null
+        ? `Current relative humidity is unavailable from Open-Meteo for ${district.name}; disease estimate reflects 72-hour rainfall (${upcomingRain3d} mm) and seasonal ${crop.name} susceptibility.`
+        : diseaseSeverity === 'High'
+        ? `Sustained ${humidityText} relative humidity and warm-to-mild nights in ${district.name} create ideal leaf-wetness conditions for ${primaryDisease} and ${crop.keyDiseases[1] ?? 'foliar blight'} in ${crop.name}.`
         : diseaseSeverity === 'Medium'
         ? `Morning dew retention and intermittent showers in ${district.name} moderately elevate ${primaryDisease} risk in dense ${crop.name} canopies with excess nitrogen.`
-        : `Lower ambient humidity (${district.currentWeather.humidityPct}%) and good airflow across ${district.name} keep fungal and bacterial pathogen pressure low for ${crop.name}.`,
+        : `Lower ambient humidity (${humidityText}) and good airflow across ${district.name} keep fungal and bacterial pathogen pressure low for ${crop.name}.`,
     preventiveAction:
       diseaseSeverity === 'High'
         ? `Scout lower leaves every 48 hours for lesions, halt excess urea immediately, widen drainage alleys for airflow, and consult your local agriculture officer for targeted preventive fungicide timing.`
@@ -1311,8 +1342,12 @@ export function generateSimulatedAdvisorResponse(
 
   if (q.includes('blight') || q.includes('disease') || q.includes('pest') || q.includes('fung') || q.includes('blast') || q.includes('insect')) {
     const disease = assessment.dimensions.find((d) => d.type === 'Disease')!;
+    const rhLabel =
+      district.currentWeather.humidityPct !== null
+        ? `${district.currentWeather.humidityPct}%`
+        : 'currently unavailable';
     return {
-      content: `In ${district.name}, relative humidity is ${district.currentWeather.humidityPct}% with ${disease.severity} disease risk (${disease.score}/100) for ${crop.name}. Primary watchpoints are ${crop.keyDiseases.join(', ')}.`,
+      content: `In ${district.name}, relative humidity is ${rhLabel} with ${disease.severity} disease risk (${disease.score}/100) for ${crop.name}. Primary watchpoints are ${crop.keyDiseases.join(', ')}.`,
       recommendations: [
         `Walk a diagonal W-pattern across your plot every 2 days at dawn to inspect lower leaves for ${crop.keyDiseases[0]} spots.`,
         'Avoid excessive urea application, which creates soft, lush tissue vulnerable to fungal infection and Brown Planthopper.',
@@ -1325,8 +1360,12 @@ export function generateSimulatedAdvisorResponse(
 
   if (q.includes('irrigat') || q.includes('water') || q.includes('awd') || q.includes('drought') || q.includes('dry')) {
     const drought = assessment.dimensions.find((d) => d.type === 'Drought')!;
+    const soilLabel =
+      district.currentWeather.soilMoisturePct !== null
+        ? `${district.currentWeather.soilMoisturePct}%`
+        : 'unavailable';
     return {
-      content: `${district.name}'s current soil moisture is simulated at ${district.currentWeather.soilMoisturePct}% on ${district.soilType.toLowerCase()}, placing ${crop.name} drought risk at ${drought.severity} (${drought.score}/100).`,
+      content: `${district.name}'s current soil moisture is ${district.currentWeather.isLive ? soilLabel : `simulated at ${soilLabel}`} on ${district.soilType.toLowerCase()}, placing ${crop.name} drought risk at ${drought.severity} (${drought.score}/100).`,
       recommendations: [
         cropId.includes('rice')
           ? 'Use Alternate Wetting & Drying (AWD / Pani Pipe): only irrigate when water drops 15 cm below soil surface, except during flowering when 2–3 cm standing water protects pollination.'
@@ -1340,8 +1379,14 @@ export function generateSimulatedAdvisorResponse(
 
   if (q.includes('heat') || q.includes('temp') || q.includes('hot') || q.includes('fertil') || q.includes('urea')) {
     const heat = assessment.dimensions.find((d) => d.type === 'Heat')!;
+    const tempText =
+      district.currentWeather.tempC !== null ? `${district.currentWeather.tempC}°C` : 'unavailable';
+    const feelsText =
+      district.currentWeather.feelsLikeC !== null
+        ? `${district.currentWeather.feelsLikeC}°C`
+        : 'unavailable';
     return {
-      content: `${district.name} is currently at ${district.currentWeather.tempC}°C (feels-like ${district.currentWeather.feelsLikeC}°C), giving ${crop.name} (optimal ${crop.optimalTempRangeC}) a ${heat.severity} heat stress rating (${heat.score}/100).`,
+      content: `${district.name} is currently at ${tempText} (feels-like ${feelsText}), giving ${crop.name} (optimal ${crop.optimalTempRangeC}) a ${heat.severity} heat stress rating (${heat.score}/100).`,
       recommendations: [
         'Split Potassium (MoP) application during early reproductive stages to strengthen cell walls against heat and lodging.',
         'Never apply foliar sprays or urea during midday peak heat (11:00–15:30 BST) to avoid leaf scorch.',
@@ -1351,13 +1396,18 @@ export function generateSimulatedAdvisorResponse(
     };
   }
 
+  const fallbackSoilText =
+    district.currentWeather.soilMoisturePct !== null
+      ? `${district.currentWeather.soilMoisturePct}%`
+      : 'unavailable';
+
   return {
-    content: `Based on simulated conditions for ${crop.name} (${crop.localName}) in ${district.name}: overall composite risk is ${assessment.compositeSeverity} (${assessment.compositeScore}/100). ${assessment.summary}`,
+    content: `Based on ${district.currentWeather.isLive ? 'live weather' : 'static baseline'} conditions for ${crop.name} (${crop.localName}) in ${district.name}: overall composite risk is ${assessment.compositeSeverity} (${assessment.compositeScore}/100). ${assessment.summary}`,
     recommendations: [
       `Priority focus: ${assessment.dimensions.sort((a, b) => b.score - a.score)[0].preventiveAction}`,
-      `Moisture plan: ${crop.waterNeedSummary}. Current district soil moisture is ${district.currentWeather.soilMoisturePct}%.`,
+      `Moisture plan: ${crop.waterNeedSummary}. Current district soil moisture is ${fallbackSoilText}.`,
       `Disease watch: Scout weekly for ${crop.keyDiseases.slice(0, 2).join(' and ')} whenever humidity stays above 80%.`,
     ],
-    timingNote: `District context: ${district.name} · ${district.agroZone} · Simulated Advisory Prototype`,
+    timingNote: `District context: ${district.name} · ${district.agroZone} · Advisory Prototype`,
   };
 }

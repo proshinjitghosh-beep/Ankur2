@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { weatherRouter } from './server/routes/weatherRoutes.ts';
+import { riskRouter } from './server/routes/riskRoutes.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +24,13 @@ async function startServer() {
   });
 
   app.use('/api/weather', weatherRouter);
+  app.use('/api/risk', riskRouter);
+
+  app.use('/api', (req, res) => {
+    res.status(404).json({
+      error: `API endpoint not found: ${req.method} ${req.originalUrl}`,
+    });
+  });
 
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');

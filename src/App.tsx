@@ -292,6 +292,7 @@ export default function App() {
               liveDistrict={activeDistrictProfile}
               weatherLoading={weatherLoading}
               weatherError={weatherError}
+              onRefreshWeather={() => setWeatherRefreshNonce((n) => n + 1)}
               onNavigate={setActiveSection}
             />
           )}
@@ -310,6 +311,9 @@ export default function App() {
             <CropRiskAnalysisView
               preferences={preferences}
               liveDistrict={activeDistrictProfile}
+              weatherLoading={weatherLoading}
+              weatherError={weatherError}
+              onRefreshWeather={() => setWeatherRefreshNonce((n) => n + 1)}
               onChangeDistrict={handleDistrictChange}
             />
           )}

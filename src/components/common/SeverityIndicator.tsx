@@ -1,10 +1,16 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, ShieldAlert } from 'lucide-react';
-import { RiskSeverity } from '../../types/agri';
+import {
+  AlertOctagon,
+  AlertTriangle,
+  CheckCircle2,
+  HelpCircle,
+  ShieldAlert,
+} from 'lucide-react';
+import { EngineRiskSeverity, RiskSeverity } from '../../types/agri';
 
 interface SeverityIndicatorProps {
-  severity: RiskSeverity;
-  score?: number;
+  severity: RiskSeverity | EngineRiskSeverity;
+  score?: number | null;
   compact?: boolean;
 }
 
@@ -26,11 +32,29 @@ export const SeverityIndicator: React.FC<SeverityIndicatorProps> = ({
       bgClass: 'bg-amber-50 border-amber-200',
       label: 'Medium Risk',
     },
+    Moderate: {
+      icon: AlertTriangle,
+      textClass: 'text-amber-800',
+      bgClass: 'bg-amber-50 border-amber-200',
+      label: 'Moderate Risk',
+    },
     High: {
       icon: ShieldAlert,
-      textClass: 'text-red-800',
-      bgClass: 'bg-red-50 border-red-200',
+      textClass: 'text-orange-900',
+      bgClass: 'bg-orange-50 border-orange-200',
       label: 'High Risk',
+    },
+    Critical: {
+      icon: AlertOctagon,
+      textClass: 'text-red-900',
+      bgClass: 'bg-red-50 border-red-300',
+      label: 'Critical Risk',
+    },
+    Unavailable: {
+      icon: HelpCircle,
+      textClass: 'text-slate-700',
+      bgClass: 'bg-slate-100 border-slate-300',
+      label: 'Unavailable',
     },
   }[severity];
 
@@ -51,7 +75,10 @@ export const SeverityIndicator: React.FC<SeverityIndicatorProps> = ({
   );
 };
 
-export function formatTemp(tempC: number, unit: 'C' | 'F'): string {
+export function formatTemp(tempC: number | null | undefined, unit: 'C' | 'F'): string {
+  if (typeof tempC !== 'number' || !Number.isFinite(tempC)) {
+    return '—';
+  }
   if (unit === 'F') {
     return `${Math.round((tempC * 9) / 5 + 32)}°F`;
   }
